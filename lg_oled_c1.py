@@ -14,13 +14,32 @@ def main():
     s = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=s)
     clean_csv(the_date)
-    amazon(the_date, driver)
-    canadacomputers(the_date, driver)
+    # amazon(the_date, driver)
+    # canadacomputers(the_date, driver)
+
+
+
+def visions(the_date, driver):
+    url_template = "https://www.visions.ca/catalogue/category/ProductResults.aspx?categoryId=0&searchText=lg%20oled%20c1"
+    url = get_url('lg oled c1', url_template, "%20")
+    driver.get(url)
+
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    results = soup.find('div', {'id': 'product-list'})
+    results_list = results.find_all('div', {'class': 'col-xl-3'})
+
+    records = []
+    for item in results_list:
+        record = extract_cc_record(the_date, item)
+        if record:
+            records.append(record)
+
+    write_csv(records)
 
 
 def canadacomputers(the_date, driver):
-    cc_url_template = "https://www.canadacomputers.com/search/results_details.php?language=en&keywords={}"
-    url = get_url('lg oled c1', cc_url_template)
+    url_template = "https://www.canadacomputers.com/search/results_details.php?language=en&keywords={}"
+    url = get_url('lg oled c1', url_template, "+")
     driver.get(url)
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -53,8 +72,8 @@ def extract_cc_record(the_date, item):
 
 
 def amazon(the_date, driver):
-    amazon_url_template = "https://www.amazon.ca/s?k={}&ref=nb_sb_noss"
-    url = get_url('lg oled c1 series', amazon_url_template)
+    url_template = "https://www.amazon.ca/s?k={}&ref=nb_sb_noss"
+    url = get_url('lg oled c1 series', url_template)
     driver.get(url)
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -69,8 +88,8 @@ def amazon(the_date, driver):
     write_csv(records)
 
 
-def get_url(search_term, url_template):
-    search_term = search_term.replace(" ", "+")
+def get_url(search_term, url_template, delimiter):
+    search_term = search_term.replace(" ", delimiter)
     return url_template.format(search_term)
 
 
