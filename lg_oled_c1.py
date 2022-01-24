@@ -151,6 +151,8 @@ def extract_amazon_record(the_date, item):
         rating = 0
     try:
         review_count = item.find('span', {'class': 'a-size-base'}).text
+        if review_count.isdigit() is False:
+            review_count = 0
     except AttributeError:
         review_count = 0
 
