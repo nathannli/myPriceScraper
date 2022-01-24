@@ -1,4 +1,5 @@
 import csv
+from multiprocessing.sharedctypes import Value
 import re
 from datetime import datetime
 import os
@@ -54,7 +55,7 @@ def extract_visions_record(the_date: str, item: str, required_term: str) -> Opti
         return None
     regex = re.search(r"\s(\d\d)\D\s", description)
     if regex is None:
-        inches = ''
+        inches = 0
     else:
         inches = regex.group().strip().replace('"', "").replace("”", "")
     try:
@@ -102,7 +103,7 @@ def extract_cc_record(the_date: str, item: str, required_term: str) -> Optional[
         return None
     regex = re.search(r"\s(\d\d)\D\s", description)
     if regex is None:
-        inches = ''
+        inches = 0
     else:
         inches = regex.group().strip().replace('"', "").replace("”", "")
     string_price = item.find('span', {'class': 'pq-hdr-product_price'}).strong.text
@@ -133,13 +134,17 @@ def amazon(search_term: str, the_date: str, driver: webdriver, required_term: st
 
 def extract_amazon_record(the_date: str, item: str, required_term: str) -> Optional[tuple[str, str, int, float, float, int, str]]:
     description = item.h2.a.text.strip()
-    if required_term not in description:
+    if required_term not in description.lower():
         return None
     regex = re.search(r"\s(\d\d)\D\s", description)
     if regex is None:
-        inches = ''
+        regex = re.search(r"\s(\d\d)-Inch.*", description)
+        if regex is None:
+            inches = 0
+        else:
+            inches = regex.group(1)
     else:
-        inches = regex.group().strip().replace('"', "").replace("”", "")
+        inches = regex.group(1).strip().replace('"', "").replace("”", "")
     try:
         string_price = item.find('span', 'a-price').find('span', 'a-offscreen').text
         price = ""
