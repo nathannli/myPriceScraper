@@ -1,8 +1,7 @@
 import csv
-from multiprocessing.sharedctypes import Value
+import os
 import re
 from datetime import datetime
-import os
 from typing import Optional
 
 from bs4 import BeautifulSoup
@@ -24,11 +23,62 @@ def pricescrape(search_term: str, driver: webdriver, the_date: str, required_ter
     amazon(search_term.lower(), the_date, driver, required_term.lower())
     canadacomputers(search_term.lower(), the_date, driver, required_term.lower())
     visions(search_term.lower(), the_date, driver, required_term.lower())
+    bestbuy(search_term.lower(), the_date, driver, required_term.lower())
 
 
 def get_url(search_term: str, url_template: str, delimiter: str) -> str:
     search_term = search_term.replace(" ", delimiter)
     return url_template.format(search_term)
+
+
+def bestbuy(search_term: str, the_date: str, driver: webdriver, required_term: str) -> None:
+    url_template = "https://www.bestbuy.ca/en-ca/search?search={}"
+    url = get_url(search_term, url_template, "+")
+    driver.get(url)
+
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    results = soup.find('div', {'class': 'productsRow_DcaXn row_1mOdd'})
+    results_list = results.find_all('div', {'class': 'col-xs-12_198le col-sm-4_13E9O col-lg-3_ECF8k x-productListItem productLine_2N9kG'})
+
+    records = []
+    for item in results_list:
+        record = extract_bestbuy_record(the_date, item, required_term)
+        if record:
+            records.append(record)
+
+    write_csv(search_term, records)
+
+
+def extract_bestbuy_record(the_date: str, item: str, required_term: str) -> Optional[tuple[str, str, int, float, float, int, str]]:
+    description = item.find('div', {'class': 'productItemName_3IZ3c'}).text
+    if required_term not in description.lower():
+        return None
+    regex = re.search(r"\s(\d\d)\D\s", description)
+    if regex is None:
+        inches = 0
+    else:
+        inches = regex.group().strip().replace('"', "").replace("”", "")
+    try:
+        rating_tag = str(item.find('meta', {'itemprop': 'ratingValue'}))
+        regex_rating = re.search(r"\scontent=\"(.*)\"\s", rating_tag)
+        rating = regex_rating.group(1).strip()
+    except AttributeError:
+        rating = 0
+    try:
+        review_count_tag = str(item.find('meta', {'itemprop': 'reviewCount'}))
+        regex_review_count = re.search(r"\scontent=\"(.*)\"\s", review_count_tag)
+        review_count = regex_review_count.group(1).strip()
+    except AttributeError:
+        review_count = 0
+    # string_price = item.find('div', {'class': 'price_FHDfG medium_za6t1 salePrice_kTFZ3'}).text
+    string_price = item.find('span', {'data-automation': 'product-price'}).find('span', {'class': 'screenReaderOnly_3anTj'}).text
+    price = ""
+    for s in string_price:
+        if s.isdigit() or s == ".":
+            price += s
+
+    return the_date, description, int(inches), float(price), float(rating), int(review_count), "bestbuy.ca"
+
 
 
 def visions(search_term: str, the_date: str, driver: webdriver, required_term: str) -> None:
