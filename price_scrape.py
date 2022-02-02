@@ -6,8 +6,12 @@ from typing import Optional
 
 from bs4 import BeautifulSoup
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.wait import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
 
 def main():
@@ -16,7 +20,7 @@ def main():
     driver = webdriver.Chrome(service=s)
     pricescrape("lg oled c1", driver, the_date, "c1")
     pricescrape("samsung odyssey neo g9", driver, the_date, "neo g9")
-    
+
 
 def pricescrape(search_term: str, driver: webdriver, the_date: str, required_term: str) -> None:
     clean_csv(search_term, the_date)
@@ -24,6 +28,7 @@ def pricescrape(search_term: str, driver: webdriver, the_date: str, required_ter
     canadacomputers(search_term.lower(), the_date, driver, required_term.lower())
     visions(search_term.lower(), the_date, driver, required_term.lower())
     bestbuy(search_term.lower(), the_date, driver, required_term.lower())
+    memory_express(search_term.lower(), the_date, driver, required_term.lower())
 
 
 def get_url(search_term: str, url_template: str, delimiter: str) -> str:
@@ -31,15 +36,60 @@ def get_url(search_term: str, url_template: str, delimiter: str) -> str:
     return url_template.format(search_term)
 
 
-def bestbuy(search_term: str, the_date: str, driver: webdriver, required_term: str) -> None:
-    url_template = "https://www.bestbuy.ca/en-ca/search?search={}"
+def memory_express(search_term: str, the_date: str, driver: webdriver, required_term: str) -> None:
+    url_template = "https://www.memoryexpress.com/Search/Products?Search={}"
     url = get_url(search_term, url_template, "+")
     driver.get(url)
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
-    results = soup.find('div', {'class': 'productsRow_DcaXn row_1mOdd'})
-    results_list = results.find_all('div', {'class': 'col-xs-12_198le col-sm-4_13E9O col-lg-3_ECF8k x-productListItem productLine_2N9kG'})
+    results = soup.find('div', {'data-role': 'product-list-container'})
+    results_list = results.find_all('div', {'class': 'c-shca-icon-item'})
 
+    records = []
+    for item in results_list:
+        record = extract_me_record(the_date, item, required_term)
+        if record:
+            records.append(record)
+
+    write_csv(search_term, records)
+
+
+def extract_me_record(the_date: str, item: str, required_term: str) -> Optional[
+    tuple[str, str, int, float, float, int, str]]:
+    description = item.find('div', {'class': 'c-shca-icon-item__body-name'}).a.text.strip()
+    if required_term not in description.lower():
+        return None
+    regex = re.search(r"\s(\d\d)in\s", description)
+    if regex is None:
+        inches = 0
+    else:
+        inches = regex.group(1)
+    rating = 0
+    review_count = 0
+    string_price = item.find('div', {'class': 'c-shca-icon-item__summary-prices'}).find('div', {
+        'class': 'c-shca-icon-item__summary-list'}).span.text.strip()
+    price = ""
+    for s in string_price:
+        if s.isdigit() or s == ".":
+            price += s
+
+    return the_date, description, int(inches), float(price), float(rating), int(review_count), "memoryexpress"
+
+
+def bestbuy(search_term: str, the_date: str, driver: webdriver, required_term: str) -> None:
+    url_template = "https://www.bestbuy.ca/en-ca/search?search={}"
+    url = get_url(search_term, url_template, "+")
+    driver.get(url)
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    delay = 3  # seconds
+    try:
+        WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CLASS_NAME, 'productsContainer_2xEUC')))
+        print("page is ready")
+    except TimeoutException:
+        print("loading page took too long")
+        raise TimeoutException
+    results = soup.find('div', {'class': 'productsContainer_2xEUC'})
+    results_list = results.find_all('div', {'class': 'x-productListItem'})
     records = []
     for item in results_list:
         record = extract_bestbuy_record(the_date, item, required_term)
@@ -71,14 +121,14 @@ def extract_bestbuy_record(the_date: str, item: str, required_term: str) -> Opti
     except AttributeError:
         review_count = 0
     # string_price = item.find('div', {'class': 'price_FHDfG medium_za6t1 salePrice_kTFZ3'}).text
-    string_price = item.find('span', {'data-automation': 'product-price'}).find('span', {'class': 'screenReaderOnly_3anTj'}).text
+    string_price = item.find('span', {'data-automation': 'product-price'}).find('span', {
+        'class': 'screenReaderOnly_3anTj'}).text
     price = ""
     for s in string_price:
         if s.isdigit() or s == ".":
             price += s
 
     return the_date, description, int(inches), float(price), float(rating), int(review_count), "bestbuy.ca"
-
 
 
 def visions(search_term: str, the_date: str, driver: webdriver, required_term: str) -> None:
@@ -99,7 +149,8 @@ def visions(search_term: str, the_date: str, driver: webdriver, required_term: s
     write_csv(search_term, records)
 
 
-def extract_visions_record(the_date: str, item: str, required_term: str) -> Optional[tuple[str, str, int, float, float, int, str]]:
+def extract_visions_record(the_date: str, item: str, required_term: str) -> Optional[
+    tuple[str, str, int, float, float, int, str]]:
     description = item.find('div', {'class': 'prodlist-title'}).a.text
     if required_term not in description.lower():
         return None
@@ -147,7 +198,8 @@ def canadacomputers(search_term: str, the_date: str, driver: webdriver, required
     write_csv(search_term, records)
 
 
-def extract_cc_record(the_date: str, item: str, required_term: str) -> Optional[tuple[str, str, int, float, float, int, str]]:
+def extract_cc_record(the_date: str, item: str, required_term: str) -> Optional[
+    tuple[str, str, int, float, float, int, str]]:
     description = item.find('span', {'class': 'productTemplate_title'}).a.text
     if required_term not in description.lower():
         return None
@@ -182,7 +234,8 @@ def amazon(search_term: str, the_date: str, driver: webdriver, required_term: st
     write_csv(search_term, records)
 
 
-def extract_amazon_record(the_date: str, item: str, required_term: str) -> Optional[tuple[str, str, int, float, float, int, str]]:
+def extract_amazon_record(the_date: str, item: str, required_term: str) -> Optional[
+    tuple[str, str, int, float, float, int, str]]:
     description = item.h2.a.text.strip()
     if required_term not in description.lower():
         return None
@@ -225,7 +278,8 @@ def extract_amazon_record(the_date: str, item: str, required_term: str) -> Optio
 def clean_csv(search_term: str, the_date: str) -> None:
     filename = search_term.replace(" ", "_") + "_results"
     if os.path.exists(filename + ".csv"):
-        with open(filename + ".csv", 'r', encoding="utf-8") as fin, open(filename + "_temp.csv", 'w', newline='', encoding='utf-8') as fout:
+        with open(filename + ".csv", 'r', encoding="utf-8") as fin, open(filename + "_temp.csv", 'w', newline='',
+                                                                         encoding='utf-8') as fout:
             # define reader and writer objects
             reader = csv.reader(fin, skipinitialspace=True)
             writer = csv.writer(fout)
