@@ -1,4 +1,7 @@
+#! /usr/bin/env python3
+
 import csv
+import logging
 import os
 import re
 from datetime import datetime
@@ -29,11 +32,61 @@ def pricescrape(search_term: str, driver: webdriver, the_date: str, required_ter
     visions(search_term.lower(), the_date, driver, required_term.lower())
     bestbuy(search_term.lower(), the_date, driver, required_term.lower())
     memory_express(search_term.lower(), the_date, driver, required_term.lower())
+    newegg(search_term.lower(), the_date, driver, required_term.lower())
 
 
 def get_url(search_term: str, url_template: str, delimiter: str) -> str:
     search_term = search_term.replace(" ", delimiter)
     return url_template.format(search_term)
+
+
+def newegg(search_term: str, the_date: str, driver: webdriver, required_term: str) -> None:
+    url_template = "https://www.newegg.ca/p/pl?d={}"
+    url = get_url(search_term, url_template, "+")
+    driver.get(url)
+
+    soup = BeautifulSoup(driver.page_source, "html.parser")
+    results = soup.find('div', {'class': 'item-cells-wrap border-cells items-grid-view four-cells expulsion-one-cell'})
+    results_list = results.find_all('div', {'class': 'item-cell'})
+
+    records = []
+    for item in results_list:
+        record = extract_newegg_record(the_date, item, required_term)
+        if record:
+            records.append(record)
+
+    write_csv(search_term, records)
+
+
+def extract_newegg_record(the_date: str, item: str, required_term: str) -> Optional[
+    tuple[str, str, int, float, float, int, str]]:
+    description = item.find('a', {'class': 'item-title'}).text.strip()
+    if required_term not in description.lower():
+        return None
+    regex = re.search(r"\s(\d\d)\"\s", description)
+    if regex is None:
+        inches = 0
+    else:
+        inches = regex.group(1)
+    try:
+        rating_tag = str(item.find('a', {'class': 'item-rating'}).i).strip()
+        regex_rating = re.search(r"\saria-label=\"rated\s(.*)\sout\sof\s5\"\s", rating_tag)
+        rating = regex_rating.group(1).strip()
+    except AttributeError:
+        rating = 0
+    try:
+        review_count_tag = item.find('span', {'class': 'item-rating-num'}).text.strip()
+        regex_review_count = re.search(r"\((.*)\)", review_count_tag)
+        review_count = regex_review_count.group(1).strip()
+    except AttributeError:
+        review_count = 0
+    string_price = item.find('li', {'class': 'price-current'}).strong.text.strip()
+    price = ""
+    for s in string_price:
+        if s.isdigit() or s == ".":
+            price += s
+
+    return the_date, description, int(inches), float(price), float(rating), int(review_count), "newegg.ca"
 
 
 def memory_express(search_term: str, the_date: str, driver: webdriver, required_term: str) -> None:
@@ -81,13 +134,14 @@ def bestbuy(search_term: str, the_date: str, driver: webdriver, required_term: s
     url = get_url(search_term, url_template, "+")
     driver.get(url)
     soup = BeautifulSoup(driver.page_source, "html.parser")
-    delay = 3  # seconds
+    delay = 5  # seconds
     try:
         WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CLASS_NAME, 'productsContainer_2xEUC')))
-        print("page is ready")
+        logging.debug("page is ready")
     except TimeoutException:
-        print("loading page took too long")
-        raise TimeoutException
+        logging.error("bestbuy loading page took too long")
+        logging.error("skipping..")
+        return
     results = soup.find('div', {'class': 'productsContainer_2xEUC'})
     results_list = results.find_all('div', {'class': 'x-productListItem'})
     records = []
