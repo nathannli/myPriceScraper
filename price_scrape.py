@@ -5,6 +5,7 @@ import logging
 import os
 import re
 from datetime import datetime
+from time import sleep
 from typing import Optional
 
 from bs4 import BeautifulSoup
@@ -22,6 +23,7 @@ def main():
     s = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=s)
     pricescrape("lg oled c1", driver, the_date, "c1")
+    sleep(3)
     pricescrape("samsung odyssey neo g9", driver, the_date, "neo g9")
 
 
@@ -95,8 +97,19 @@ def memory_express(search_term: str, the_date: str, driver: webdriver, required_
     driver.get(url)
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
+
+    delay = 5  # seconds
+    try:
+        WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CLASS_NAME, 'c-cact-product-list')))
+        logging.debug("page is ready")
+    except TimeoutException:
+        logging.error("memory express loading page took too long")
+        logging.error("skipping..")
+        return
+
     results = soup.find('div', {'data-role': 'product-list-container'})
     results_list = results.find_all('div', {'class': 'c-shca-icon-item'})
+
 
     records = []
     for item in results_list:
@@ -225,7 +238,7 @@ def extract_visions_record(the_date: str, item: str, required_term: str) -> Opti
             review_count = 0
     except AttributeError:
         review_count = 0
-    string_price = item.find('span', {'class': 'saleprice-432gh'}).text
+    string_price = item.find('div', {'class': 'ht389-saleprice'}).text
     price = ""
     for s in string_price:
         if s.isdigit() or s == ".":
