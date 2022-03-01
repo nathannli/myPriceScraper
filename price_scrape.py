@@ -23,8 +23,8 @@ def main():
     s = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=s)
     pricescrape("lg oled c1", driver, the_date, "c1")
-    sleep(3)
-    pricescrape("samsung odyssey neo g9", driver, the_date, "neo g9")
+    # sleep(3)
+    # pricescrape("samsung odyssey neo g9", driver, the_date, "neo g9")
 
 
 def pricescrape(search_term: str, driver: webdriver, the_date: str, required_term: str) -> None:
@@ -67,9 +67,11 @@ def extract_newegg_record(the_date: str, item: str, required_term: str) -> Optio
         return None
     regex = re.search(r"\s(\d\d)\"\s", description)
     if regex is None:
-        inches = 0
-    else:
-        inches = regex.group(1)
+        regex = re.search(r"\s(\d\d)\sinch\s", description)
+        if regex is None:
+            inches = 0
+        else:
+            inches = regex.group(1)
     try:
         rating_tag = str(item.find('a', {'class': 'item-rating'}).i).strip()
         regex_rating = re.search(r"\saria-label=\"rated\s(.*)\sout\sof\s5\"\s", rating_tag)
