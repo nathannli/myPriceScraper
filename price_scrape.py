@@ -15,13 +15,14 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.edge.service import Service
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
 
 
 def main():
     the_date = datetime.today().strftime('%Y-%m-%d')
-    s = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=s)
+    s = Service(EdgeChromiumDriverManager().install())
+    driver = webdriver.Edge(service=s)
     pricescrape("lg oled c1", driver, the_date, "c1")
     # sleep(3)
     # pricescrape("samsung odyssey neo g9", driver, the_date, "neo g9")
@@ -48,6 +49,16 @@ def newegg(search_term: str, the_date: str, driver: webdriver, required_term: st
     driver.get(url)
 
     soup = BeautifulSoup(driver.page_source, "html.parser")
+
+    delay = 5  # seconds
+    try:
+        WebDriverWait(driver, delay).until(EC.presence_of_element_located((By.CLASS_NAME, 'price-current')))
+        logging.debug("page is ready")
+    except TimeoutException:
+        logging.error("newegg loading page took too long")
+        logging.error("skipping..")
+        return
+
     results = soup.find('div', {'class': 'item-cells-wrap border-cells items-grid-view four-cells expulsion-one-cell'})
     results_list = results.find_all('div', {'class': 'item-cell'})
 
@@ -84,13 +95,19 @@ def extract_newegg_record(the_date: str, item: str, required_term: str) -> Optio
         review_count = regex_review_count.group(1).strip()
     except AttributeError:
         review_count = 0
-    string_price = item.find('li', {'class': 'price-current'}).strong.text.strip()
+    string_price = ""
+    try:
+        string_price = item.find('li', {'class': 'price-current'}).strong.text.strip()
+    except AttributeError:
+        print(f"newegg price error: {description}")
     price = ""
     for s in string_price:
         if s.isdigit() or s == ".":
             price += s
+    if price != "":
+        price = float(price)
 
-    return the_date, description, int(inches), float(price), float(rating), int(review_count), "newegg.ca"
+    return the_date, description, int(inches), price, float(rating), int(review_count), "newegg.ca"
 
 
 def memory_express(search_term: str, the_date: str, driver: webdriver, required_term: str) -> None:
@@ -190,14 +207,19 @@ def extract_bestbuy_record(the_date: str, item: str, required_term: str) -> Opti
     except AttributeError:
         review_count = 0
     # string_price = item.find('div', {'class': 'price_FHDfG medium_za6t1 salePrice_kTFZ3'}).text
-    string_price = item.find('span', {'data-automation': 'product-price'}).find('span', {
-        'class': 'screenReaderOnly_3anTj'}).text
+    string_price = ""
+    try:
+        string_price = item.find('span', {'data-automation': 'product-price'}).find('span', {'class': 'screenReaderOnly_3anTj'}).text
+    except AttributeError:
+        print(f"bestbuy price error: {description}")
     price = ""
     for s in string_price:
         if s.isdigit() or s == ".":
             price += s
+    if price != "":
+        price = float(price)
 
-    return the_date, description, int(inches), float(price), float(rating), int(review_count), "bestbuy.ca"
+    return the_date, description, int(inches), price, float(rating), int(review_count), "bestbuy.ca"
 
 
 def visions(search_term: str, the_date: str, driver: webdriver, required_term: str) -> None:
