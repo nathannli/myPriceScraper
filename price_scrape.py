@@ -334,7 +334,11 @@ def extract_amazon_record(the_date: str, item: str, required_term: str) -> Optio
     if regex is None:
         regex = re.search(r"\s(\d\d)-Inch.*", description)
         if regex is None:
-            inches = 0
+            regex = re.search(r"\s(\d\d) Inch.*", description)
+            if regex is None:
+                inches = 0
+            else:
+                inches = regex.group(1)
         else:
             inches = regex.group(1)
     else:
