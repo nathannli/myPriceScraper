@@ -23,12 +23,12 @@ def main():
     the_date = datetime.today().strftime('%Y-%m-%d')
     s = Service(EdgeChromiumDriverManager().install())
     driver = webdriver.Edge(service=s)
-    pricescrape("lg oled c1", driver, the_date, "c1")
+    # pricescrape("lg oled c1", driver, the_date, "c1")
     # sleep(3)
     # pricescrape("samsung odyssey neo g9", driver, the_date, "neo g9")
 
 
-def pricescrape(search_term: str, driver: webdriver, the_date: str, required_term: str) -> None:
+def price_scrape(search_term: str, driver: webdriver, the_date: str, required_term: str) -> None:
     clean_csv(search_term, the_date)
     amazon(search_term.lower(), the_date, driver, required_term.lower())
     canadacomputers(search_term.lower(), the_date, driver, required_term.lower())
@@ -71,30 +71,45 @@ def newegg(search_term: str, the_date: str, driver: webdriver, required_term: st
     write_csv(search_term, records)
 
 
-def extract_newegg_record(the_date: str, item: str, required_term: str) -> Optional[
-    tuple[str, str, int, float, float, int, str]]:
+def extract_newegg_record(the_date: str, item: str, required_term: str, item_type: str) -> Optional[tuple[str, str, int, float, float, int, str]]:
+    result = (the_date,)
+
+    # item name
     description = item.find('a', {'class': 'item-title'}).text.strip()
     if required_term not in description.lower():
         return None
-    regex = re.search(r"\s(\d\d)\"\s", description)
-    if regex is None:
-        regex = re.search(r"\s(\d\d)\sinch\s", description)
+    result += (description,)
+
+    # monitor size
+    if item_type == "monitor":
+        regex = re.search(r"\s(\d\d)\"\s", description)
         if regex is None:
-            inches = 0
-        else:
-            inches = regex.group(1)
+            regex = re.search(r"\s(\d\d)\sinch\s", description)
+            if regex is None:
+                inches = 0
+            else:
+                inches = regex.group(1)
+        result += (int(inches),)
+
+    # rating
     try:
         rating_tag = str(item.find('a', {'class': 'item-rating'}).i).strip()
         regex_rating = re.search(r"\saria-label=\"rated\s(.*)\sout\sof\s5\"\s", rating_tag)
         rating = regex_rating.group(1).strip()
     except AttributeError:
         rating = 0
+    result += (float(rating),)
+
+    # rating count
     try:
         review_count_tag = item.find('span', {'class': 'item-rating-num'}).text.strip()
         regex_review_count = re.search(r"\((.*)\)", review_count_tag)
         review_count = regex_review_count.group(1).strip()
     except AttributeError:
         review_count = 0
+    result += (int(review_count),)
+
+    # price
     string_price = ""
     try:
         string_price = item.find('li', {'class': 'price-current'}).strong.text.strip()
@@ -106,6 +121,8 @@ def extract_newegg_record(the_date: str, item: str, required_term: str) -> Optio
             price += s
     if price != "":
         price = float(price)
+
+    # return aggregated row
 
     return the_date, description, int(inches), price, float(rating), int(review_count), "newegg.ca"
 
@@ -128,7 +145,6 @@ def memory_express(search_term: str, the_date: str, driver: webdriver, required_
 
     results = soup.find('div', {'data-role': 'product-list-container'})
     results_list = results.find_all('div', {'class': 'c-shca-icon-item'})
-
 
     records = []
     for item in results_list:
@@ -185,7 +201,8 @@ def bestbuy(search_term: str, the_date: str, driver: webdriver, required_term: s
     write_csv(search_term, records)
 
 
-def extract_bestbuy_record(the_date: str, item: str, required_term: str) -> Optional[tuple[str, str, int, float, float, int, str]]:
+def extract_bestbuy_record(the_date: str, item: str, required_term: str) -> Optional[
+    tuple[str, str, int, float, float, int, str]]:
     description = item.find('div', {'class': 'productItemName_3IZ3c'}).text
     if required_term not in description.lower():
         return None
@@ -209,7 +226,8 @@ def extract_bestbuy_record(the_date: str, item: str, required_term: str) -> Opti
     # string_price = item.find('div', {'class': 'price_FHDfG medium_za6t1 salePrice_kTFZ3'}).text
     string_price = ""
     try:
-        string_price = item.find('span', {'data-automation': 'product-price'}).find('span', {'class': 'screenReaderOnly_3anTj'}).text
+        string_price = item.find('span', {'data-automation': 'product-price'}).find('span', {
+            'class': 'screenReaderOnly_3anTj'}).text
     except AttributeError:
         print(f"bestbuy price error: {description}")
     price = ""
